@@ -9,9 +9,11 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 const BUFFER = 16 * 1024
+const TIMEOUT = 30 * time.Second
 const DEBUG = true
 
 func printError(err error) {
@@ -19,30 +21,21 @@ func printError(err error) {
 		fmt.Println(err, err.Error())
 	}
 }
-func printString(str string) {
-	if DEBUG {
-		fmt.Println(str)
-	}
-}
 
 func computeKey(str string) []byte {
 	bytes := []byte(str)
-	hasher := sha512.New512_224()
+	hasher := sha512.New()
 	hasher.Write(bytes)
 	return hasher.Sum(nil)
 }
 
 func xorCopy(dst net.Conn, src net.Conn, key []byte) (err error) {
-	if cw, ok := dst.(interface{ CloseWrite() error }); ok {
-		defer cw.CloseWrite()
-	} else {
-		return fmt.Errorf("Connection doesn't implement CloseWrite method")
-	}
-	if cw, ok := src.(interface{ CloseRead() error }); ok {
-		defer cw.CloseRead()
-	} else {
-		return fmt.Errorf("Connection doesn't implement CloseRead method")
-	}
+	defer func(dst net.Conn) {
+		_ = dst.Close()
+	}(dst)
+	defer func(src net.Conn) {
+		_ = src.Close()
+	}(src)
 
 	buf := make([]byte, BUFFER)
 	xorKeyIndex := 0
@@ -51,7 +44,7 @@ func xorCopy(dst net.Conn, src net.Conn, key []byte) (err error) {
 		if nr > 0 {
 			goodBuf := buf[:nr]
 			for i := 0; i < len(goodBuf); i++ {
-				// don't just do `goodBuf[i] ^= key[i%len(key)]` cause nr < buf happens
+				// don't just do `goodBuf[i] ^= key[i%len(key)]` cause `nr < len(buf)` happens
 				goodBuf[i] ^= key[xorKeyIndex]
 				xorKeyIndex = (xorKeyIndex + 1) % len(key)
 			}
@@ -67,7 +60,7 @@ func xorCopy(dst net.Conn, src net.Conn, key []byte) (err error) {
 				break
 			}
 			if nr != nw {
-				err = errors.New("ErrShortWrite")
+				err = io.ErrShortWrite
 				break
 			}
 		}
@@ -82,18 +75,17 @@ func xorCopy(dst net.Conn, src net.Conn, key []byte) (err error) {
 }
 
 func main() {
-
 	listenHost := flag.String("l", "127.0.0.1:1234", "listened address")
 	remoteHost := flag.String("r", "127.0.0.1:22", "remote address forwarding to")
-	sendPassword := flag.String("sp", "SendPassword", "password when sending data")
-	receivePassword := flag.String("rp", "ReceivePassword", "password when receving data")
+	sendPassword := flag.String("sp", "SendP@ssw0rd", "password when sending data")
+	receivePassword := flag.String("rp", "ReceiveP@ssw0rd", "password when receving data")
 	flag.Parse()
 
 	sendKey := computeKey(*sendPassword)
 	receiveKey := computeKey(*receivePassword)
 	if DEBUG {
-		println(fmt.Sprintf("sendKey:%x", sendKey))
-		println(fmt.Sprintf("receiveKey:%x", receiveKey))
+		println(fmt.Sprintf("sendKey :%x", sendKey))
+		println(fmt.Sprintf("receiveKey: %x", receiveKey))
 	}
 
 	log.Printf("Listening on %s ...", *listenHost)
@@ -110,40 +102,25 @@ func main() {
 		}
 
 		log.Printf("Establishing connection to %s", *remoteHost)
-		remoteConnection, err := net.Dial("tcp", *remoteHost)
+		remoteConnection, err := net.DialTimeout("tcp", *remoteHost, TIMEOUT)
 		if err != nil {
 			printError(err)
 			_ = localConnection.Close()
 			continue
 		}
 
-		pipe(localConnection, remoteConnection, sendKey, receiveKey)
+		go func() {
+			err := xorCopy(remoteConnection, localConnection, sendKey)
+			if err != nil {
+				printError(err)
+			}
+		}()
+		go func() {
+			err := xorCopy(localConnection, remoteConnection, receiveKey)
+			if err != nil {
+				printError(err)
+			}
+		}()
 	}
 
-}
-func pipe(localConnection net.Conn, remoteConnection net.Conn, sendKey []byte, receiveKey []byte) {
-	errorNum := 0
-	onClose := func() {
-		if errorNum >= 2 {
-			printString("Closing the connections...")
-			_ = remoteConnection.Close()
-			_ = localConnection.Close()
-		}
-	}
-	go func() {
-		err := xorCopy(remoteConnection, localConnection, sendKey)
-		if err != nil {
-			printError(err)
-			errorNum++
-			onClose()
-		}
-	}()
-	go func() {
-		err := xorCopy(localConnection, remoteConnection, receiveKey)
-		if err != nil {
-			printError(err)
-			errorNum++
-			onClose()
-		}
-	}()
 }

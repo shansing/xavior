@@ -147,23 +147,3 @@ func pipe(localConnection net.Conn, remoteConnection net.Conn, sendKey []byte, r
 		}
 	}()
 }
-
-//type XOREncryptWriter struct {
-//	key []byte
-//	w   io.Writer
-//}
-//
-//func NewXOREncryptWriter(key []byte, w io.Writer) *XOREncryptWriter {
-//	return &XOREncryptWriter{
-//		key: key,
-//		w:   w,
-//	}
-//}
-//
-//func (xw *XOREncryptWriter) Write(p []byte) (n int, err error) {
-//	encrypted := make([]byte, len(p))
-//	for i := 0; i < len(p); i++ {
-//		encrypted[i] = p[i] ^ xw.key[i%len(xw.key)]
-//	}
-//	return xw.w.Write(encrypted)
-//}

@@ -14,13 +14,13 @@ xavior
   -rp   <receivePassword>    password when receving data  
 ```
 
-Due to the nature of XOR, there is no need to distinguish the server and client, so the following command can be executed on both sides:
+Due to the nature of XOR, there is no need to distinguish the server and client, so the following command can be executed on the server side and the client:
 
 ```sh
  ./xavior -l "0.0.0.0:2222" -r "127.0.0.1:22" -sp "123456" -rp "123456"
 ```
 
-You can also specify different passwords for downstream and uplink. That adds a little security to active detection; but note that it is still insecure!
+You can specify different passwords for downstream and uplink. That adds a little security to active detection. But please note that it is still insecure!
 
 ## Example
 
@@ -38,7 +38,7 @@ On your computer, execute:
  ./xavior -l "127.0.0.1:5555" -r "10.10.10.10:2222" -sp "ChangeTh1sToARandomLonger0ne123456" -rp "ChangeTh1sToARandomLonger0ne654321"
 ```
 
-Right, no need to swap the `-sp` and `-rp`. Then you can log in to your SSH server though the XOR tunnel:
+Right, no need to swap the `-sp` and `-rp`. Then you can log in to your SSH server through the XOR tunnel:
 
 ```sh
 ssh username@127.0.0.1 -p5555
@@ -52,6 +52,14 @@ ssh username@10.10.10.10 -p22
 
 Windows is also supported.
 
+## Build
+
+Build xavior as you would a normal go lang program.
+
+```sh
+go build -ldflags "-s -w" xavior.go
+```
+
 ## Contribute
 
-Well, it is just like a learning project. Please play your precious time on other ones.
+Well, it is merely a learning project. Please devote your valuable time to other ones.
